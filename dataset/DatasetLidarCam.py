@@ -60,7 +60,7 @@ def lidar_project_depth(pc, cam_calib, img_shape):
     pcl_z = pcl_z[mask]
     pcl_uv = pcl_uv.astype(np.uint32)
     pcl_z = pcl_z.reshape(-1, 1)
-    depth_img = np.zeros(img_shape[0], img_shape[1], 1)
+    depth_img = np.zeros((img_shape[0], img_shape[1], 1), dtype=np.float32)
     depth_img[pcl_uv[:, 1], pcl_uv[:, 0]] = pcl_z
     depth_img = torch.from_numpy(depth_img.astype(np.float32))
     depth_img = depth_img.permute(2, 0, 1)
