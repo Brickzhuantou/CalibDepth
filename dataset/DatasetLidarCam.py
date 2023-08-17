@@ -127,7 +127,7 @@ class Resampler:
     
 
 class DatasetKittiRawCalibNet(Dataset):
-    def __init__(self, dataset_dir, transform = None, augmentation = Flase,
+    def __init__(self, dataset_dir, transform = None, augmentation = False,
                  use_reflectance = False, max_t = 1.5, max_r = 15.0,
                  split = 'val', device = 'cpu',
                  val_sequence = ['2011_09_26_drive_0005_sync', '2011_09_26_drive_0070_sync']):

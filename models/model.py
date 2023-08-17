@@ -138,3 +138,27 @@ class Agent(nn.Module):
         action_mean, hc = self.calib_action(state_emb, h_last, c_last)
 
         return action_mean, predict_depth, hc
+
+class berHuLoss(nn.Module):
+    def __init__(self):
+        super(berHuLoss, self).__init__()
+
+    def forward(self, pred, target):
+        assert pred.dim() == target.dim(), "inconsistent dimensions"
+
+        huber_c = torch.max(torch.abs(pred - target))
+        huber_c = 0.2 * huber_c
+
+        valid_mask = (target > 0).detach()
+        diff = target - pred
+        diff = diff[valid_mask]
+        diff = diff.abs()
+
+        huber_mask = (diff > huber_c).detach()
+
+        diff2 = diff[huber_mask]
+        diff2 = diff2 ** 2
+
+        self.loss = torch.cat((diff, diff2)).mean()
+
+        return self.loss
