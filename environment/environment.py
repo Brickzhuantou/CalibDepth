@@ -66,9 +66,8 @@ def step_continous(source, actions, pose_source):
     pose_update = torch.eye(4, device=DEVICE).repeat(pose_source.shape[0], 1, 1)
     pose_update[:, :3, :3] = tra.axis_angle_to_matrix(steps_r)
     pose_update[:, :3, 3] = steps_t
-    pose_source = pose_source @ pose_update
-    
-    new_source = tra.apply_trafo(source, pose_source, False)
+    pose_source = pose_update @ pose_source.to(DEVICE) 
+    new_source = tra.apply_trafo(source.to(DEVICE), pose_source, False)
     
     return new_source, pose_source
 
@@ -79,7 +78,6 @@ def expert_step_real(pose_source, targets, mode='steady'):
     """
     delta_t = targets[:, :3, 3] - pose_source[:, :3, 3]
     delta_R = targets[:, :3, :3] @ pose_source[:, :3, :3].transpose(2, 1)  # global accumulator
-    # TODO: 验证一下这里的转置是否需要
 
     delta_r = tra.matrix_to_axis_angle(delta_R)       # 旋转矩阵到旋转向量
 

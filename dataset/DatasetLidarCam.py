@@ -50,12 +50,11 @@ def lidar_project_depth(pc, cam_calib, img_shape):
         pcl_uv: 点云的像素坐标(N, 2)
     """
     pc = pc[:3, :].detach().cpu().numpy()
-    cam_intrinsic = cam_calib.numpy()
+    cam_intrinsic = cam_calib.detach().cpu().numpy()
     pcl_uv, pcl_z = get_2D_lidar_projection(pc, cam_intrinsic)
     mask = (pcl_uv[:, 0]>0) & (pcl_uv[:, 0]<img_shape[1]) & (
             pcl_uv[:, 1]>0) & (pcl_uv[:, 1]<img_shape[0]) & (
             pcl_z>0)  # 筛选出图像内且深度大于0的点
-    #TODO:pcl_uv的像素维度顺序好像和图像不一样需要验证一下；
     pcl_uv = pcl_uv[mask]
     pcl_z = pcl_z[mask]
     pcl_uv = pcl_uv.astype(np.uint32)
@@ -339,6 +338,7 @@ class DatasetKittiRawCalibNet(Dataset):
                       'calib': calib,
                       'rgb_name': rgb_name, # TODO：少了个后缀验一下
                       'item': item, 
+                      'img_path': img_path,
                       'tr_error': T, 'rot_error': R, 
                       'pc_target': pc_target,
                       'pc_source': pc_source,

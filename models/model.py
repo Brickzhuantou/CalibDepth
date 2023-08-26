@@ -70,7 +70,7 @@ class StateEmbed(nn.Module):
     def forward(self, rgb_img, depth_img):
         # 图像分支
         res_emb = self.resnet_encoder(rgb_img)
-        rgb_dep = self.rgb_depth_decoder(res_emb)[("disp", 2)]
+        rgb_dep = self.rgb_depth_decoder(res_emb)[("disp_up", 2)]
         _, scale_dep = disp_to_depth(rgb_dep, 0.1, 80) # 获取中间深度图
         scale_dep_emb = self.rgb_dep_encoder(scale_dep/80) # 图像分支深度图编码
         _, _, x3 = res_emb
@@ -162,3 +162,15 @@ class berHuLoss(nn.Module):
         self.loss = torch.cat((diff, diff2)).mean()
 
         return self.loss
+    
+    
+# --- model helpers
+def load(model, path):
+    infos = torch.load(path)
+    model.load_state_dict(infos['model_state_dict'])
+    return infos
+
+
+def save(model, path, infos={}):
+    infos['model_state_dict'] = model.state_dict()
+    torch.save(infos, path)

@@ -28,6 +28,7 @@ def lidar_project_depth_batch(pc, calib, img_shape):
     depth_img_out = []
     for idx in range(pc.shape[0]):
         depth_img, _ = lidar_project_depth(pc[idx].transpose(0, 1), calib[idx], img_shape)
+        depth_img = depth_img.to(DEVICE)
         depth_img_out.append(depth_img)
 
     depth_img_out = torch.stack(depth_img_out)
@@ -61,7 +62,7 @@ def parse_args():
         help="the learning rate's scale step of the optimizer")
     parser.add_argument("--epoch", type=int, default=50,
         help="the epochs for training")
-    parser.add_argument("--batch_size", type=int, default=32,
+    parser.add_argument("--batch_size", type=int, default=8,
         help="the batch size for data collection")
     parser.add_argument("--update_batch_size", type=int, default=64,
         help="the batch size for training")
@@ -69,22 +70,12 @@ def parse_args():
         help="the worker nums for training")
     parser.add_argument("--seed", type=int, default=42,
         help="seeds")
-    parser.add_argument("--ITER_TRAIN", type=int, default=5,
+    parser.add_argument("--ITER_TRAIN", type=int, default=3,
         help="train iterations")
-    parser.add_argument("--ITER_EVAL", type=int, default=5,
+    parser.add_argument("--ITER_EVAL", type=int, default=3,
         help="value iterations")
-    parser.add_argument("--NUM_TRAJ", type=int, default=4,
-        help="trajectory numbers")
-    parser.add_argument("--clip_coef", type=float, default=0.2,
-        help="clip for policy loss")
-    parser.add_argument("--clip_vloss", type=bool, default=True,
-        help="clip vloss or not")
-    parser.add_argument("--ent_coef", type=float, default=0.0,
-        help="coefficient of the entropy")
-    parser.add_argument("--vf_coef", type=float, default=0.5,
-        help="coefficient of the value function")
-    parser.add_argument("--max-grad-norm", type=float, default=0.5,
-        help="the maximum norm for the gradient clipping")
+    # parser.add_argument("--NUM_TRAJ", type=int, default=4,
+    #     help="trajectory numbers")
     
     # Algorithm specific arguments
     
@@ -122,8 +113,8 @@ class GenerateSeq(nn.Module):
             action_t, action_r = actions[0].unsqueeze(1), actions[1].unsqueeze(1)
             action_tr = torch.cat([action_t, action_r], dim = 1)
             # 下一步状态
-            new_source, pos_src = env.step_continous(ds_pc_source, action_tr, pos_src, False)
-            exp_new_source, exp_pos_src = env.step_continous(ds_pc_source, expert_action, exp_pos_src, False)
+            new_source, pos_src = env.step_continous(ds_pc_source, action_tr, pos_src) # new_source只用来记录当前点云，不迭代更新输入点云（apply_trafo决定）
+            exp_new_source, exp_pos_src = env.step_continous(ds_pc_source, expert_action, exp_pos_src)
             # 状态更新
             current_source = new_source
             depth = lidar_project_depth_batch(current_source, calib, (384, 1280))  # 更新后点云对应的一个batch的深度图
@@ -290,7 +281,7 @@ def evaluate(agent, logger, loader, prefix='test'):
                 action_t, action_r = actions[0].unsqueeze(1), actions[1].unsqueeze(1)
                 action_tr = torch.cat([action_t, action_r], dim = 1)
                 
-                new_source, pose_source = env.step_continous(ds_pc_source, action_tr, pose_source, False)
+                new_source, pose_source = env.step_continous(ds_pc_source, action_tr, pose_source)
                 current_source = new_source
                 current_depth = lidar_project_depth_batch(current_source, calib, (384, 1280))  # 更新后点云对应的一个batch的深度图
                 current_depth /= 80
@@ -303,7 +294,6 @@ def evaluate(agent, logger, loader, prefix='test'):
     logger.record(f"{prefix}/iso-r", summary_metrics['r_iso'])
     logger.record(f"{prefix}/iso-t", summary_metrics['t_iso'])
     logger.record(f"{prefix}/chamfer", summary_metrics['chamfer_dist'])
-    logger.record(f"{prefix}/adi-auc", summary_metrics['adi_auc10'] * 100)
     return summary_metrics['chamfer_dist']
 
 if __name__ == '__main__':
@@ -311,13 +301,22 @@ if __name__ == '__main__':
     dataset = args.dataset
     save_id = args.save_id
     code_path = os.path.dirname(os.path.abspath(__file__))
-    if not os.path.exists(os.path.join(code_path, "logs")):
-        os.mkdir(os.path.join(code_path, "logs"))
-    if not os.path.exists(os.path.join(code_path, "weights")):
-        os.mkdir(os.path.join(code_path, "weights"))
+    if not os.path.exists(os.path.join(code_path, "logs_lstm")):
+        os.mkdir(os.path.join(code_path, "logs_lstm"))
+    if not os.path.exists(os.path.join(code_path, "weights_lstm")):
+        os.mkdir(os.path.join(code_path, "weights_lstm"))
         
     model_path = os.path.join(code_path, f"weights_lstm/{dataset}_{save_id}")
     logger = Logger(log_dir=os.path.join(code_path, f"logs_lstm/{dataset}/"), log_name=f"calibdepth_{save_id}",
                     reset_num_timesteps=True)
     
     agent = Agent().to(DEVICE)
+    calib_seq = GenerateSeq(agent).to(DEVICE)
+    print(f"Training: dataset '{dataset}'")
+    train(calib_seq, agent, logger,
+          datapath=args.data_folder, max_t = args.max_t, max_r = args.max_r,
+          epochs=args.epoch, batch_size=args.batch_size, num_worker=args.num_worker,
+          lr=args.learning_rate, lr_step=args.learning_rate_step, 
+          model_path=model_path, val_sequence=args.val_sequence)
+    
+    
